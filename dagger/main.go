@@ -9,6 +9,29 @@ import (
 
 type MonitoringStand struct{}
 
+// dockerContainer подготавливает окружение: гарантирует правильные файлы .env и .my.cnf
+// как внутри Dagger, так и на самом хосте (устраняет ложные директории Docker)
+func (m *MonitoringStand) dockerContainer(sock *dagger.Socket, src *dagger.Directory, hostPath string) *dagger.Container {
+	return dag.Container().
+		From("docker:29.9.2-cli-alpine3.24").
+		WithUnixSocket("/var/run/docker.sock", sock).
+		WithMountedDirectory("/workspace", src).
+		WithWorkdir("/workspace").
+		// 1. Гарантируем файлы внутри Dagger workspace:
+		WithExec([]string{
+			"sh", "-c",
+			"test -f /workspace/.env || cp /workspace/.env.example /workspace/.env; test -f /workspace/.my.cnf || cp /workspace/.my.cnf.example /workspace/.my.cnf",
+		}).
+		// 2. Гарантируем файлы на самом хосте (удаляем ошибочные папки .my.cnf/, если Docker их создал):
+		WithExec([]string{
+			"docker", "run", "--rm",
+			"-v", fmt.Sprintf("%s:/host", hostPath),
+			"alpine:3.24.3",
+			"sh", "-c",
+			"test -d /host/.my.cnf && rm -rf /host/.my.cnf; test -f /host/.my.cnf || cp /host/.my.cnf.example /host/.my.cnf; test -f /host/.env || cp /host/.env.example /host/.env",
+		})
+}
+
 // deployLayer — хелпер для запуска слоев Docker Compose
 func (m *MonitoringStand) deployLayer(
 	ctx context.Context,
@@ -17,11 +40,7 @@ func (m *MonitoringStand) deployLayer(
 	hostPath string,
 	composeFileName string,
 ) (string, error) {
-	return dag.Container().
-		From("docker:cli").
-		WithUnixSocket("/var/run/docker.sock", sock).
-		WithMountedDirectory("/workspace", src).
-		WithWorkdir("/workspace").
+	return m.dockerContainer(sock, src, hostPath).
 		WithExec([]string{
 			"docker", "compose",
 			"--project-directory", hostPath,
@@ -55,10 +74,7 @@ func (m *MonitoringStand) runInNetwork(
 	}
 	dockerCmd = append(dockerCmd, cmd...)
 
-	return dag.Container().
-		From("docker:cli").
-		WithUnixSocket("/var/run/docker.sock", sock).
-		WithMountedDirectory("/workspace", src).
+	return m.dockerContainer(sock, src, hostPath).
 		WithExec(dockerCmd).
 		Stdout(ctx)
 }
@@ -107,11 +123,7 @@ func (m *MonitoringStand) DeployMonitoring(
 		promConfigFile = "./prometheus.galera.yaml"
 	}
 
-	return dag.Container().
-		From("docker:cli").
-		WithUnixSocket("/var/run/docker.sock", dockerSock).
-		WithMountedDirectory("/workspace", source).
-		WithWorkdir("/workspace").
+	return m.dockerContainer(dockerSock, source, hostPath).
 		WithEnvVariable("PROMETHEUS_CONFIG", promConfigFile).
 		WithExec([]string{
 			"docker", "compose",
@@ -150,7 +162,7 @@ func (m *MonitoringStand) ConfigureGrafana(
 	// +default=false
 	galera bool,
 ) (string, error) {
-	return m.runInNetwork(ctx, dockerSock, source, hostPath, "curlimages/curl:latest", galera, []string{
+	return m.runInNetwork(ctx, dockerSock, source, hostPath, "curlimages/curl:8.23.0", galera, []string{
 		"/bin/sh", "/scripts/configure-grafana.sh",
 	})
 }
@@ -164,9 +176,11 @@ func (m *MonitoringStand) ChaosTest(
 	// +defaultPath="."
 	source *dagger.Directory,
 ) (string, error) {
-	return m.runInNetwork(ctx, dockerSock, source, hostPath, "curlimages/curl:latest", false, []string{
-		"/bin/sh", "/scripts/chaos-test.sh",
-	})
+	return m.dockerContainer(dockerSock, source, hostPath).
+		WithExec([]string{
+			"/bin/sh", "/workspace/scripts/chaos-test.sh",
+		}).
+		Stdout(ctx)
 }
 
 // ValidateHealth проводит проверку здоровья всех компонентов контура
@@ -181,7 +195,7 @@ func (m *MonitoringStand) ValidateHealth(
 	// +default=false
 	galera bool,
 ) (string, error) {
-	return m.runInNetwork(ctx, dockerSock, source, hostPath, "curlimages/curl:latest", galera, []string{
+	return m.runInNetwork(ctx, dockerSock, source, hostPath, "curlimages/curl:8.23.0", galera, []string{
 		"/bin/sh", "/scripts/validate-health.sh",
 	})
 }
@@ -237,11 +251,7 @@ func (m *MonitoringStand) Destroy(
 	// +defaultPath="."
 	source *dagger.Directory,
 ) (string, error) {
-	return dag.Container().
-		From("docker:cli").
-		WithUnixSocket("/var/run/docker.sock", dockerSock).
-		WithMountedDirectory("/workspace", source).
-		WithWorkdir("/workspace").
+	return m.dockerContainer(dockerSock, source, hostPath).
 		WithExec([]string{"docker", "compose", "--project-directory", hostPath, "-f", "/workspace/docker-compose.monitoring.yaml", "down", "-v", "--remove-orphans"}).
 		WithExec([]string{"docker", "compose", "--project-directory", hostPath, "-f", "/workspace/docker-compose.galera.yaml", "down", "-v", "--remove-orphans"}).
 		WithExec([]string{"docker", "compose", "--project-directory", hostPath, "-f", "/workspace/docker-compose.app.yaml", "down", "-v", "--remove-orphans"}).

@@ -1,0 +1,4 @@
+[client]
+user=exporter
+password=GenerateStrongExporterPass789!
+port=3306

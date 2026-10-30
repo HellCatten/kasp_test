@@ -50,33 +50,13 @@ cd /path/to/project
 ```
 
 ### 2. Настройка переменных окружения (`.env`)
-Создайте файл `.env` в корне проекта (если он отсутствует) и ограничьте к нему доступ:
+
+Скопируйте example файла .env.example .my.cnf.example
 ```bash
-cat << 'EOF' > .env
-# MariaDB
-MARIADB_DATABASE=uptime
-MARIADB_USER=uptime
-MARIADB_PASSWORD=StrongDbPassword321!
-MARIADB_ROOT_PASSWORD=RootStrongPassword321!
-
-# Uptime Kuma
-KUMA_USERNAME=admin
-KUMA_PASSWORD=AdminStrongPassword321!
-
-# Grafana
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=AdminStrongPassword321!
-
-# Timezone
-TZ=UTC
-EOF
-
-chmod 600 .env
-```
-
-или скопируйте его из .env.example
-```
+# Подготовка файлов конфигурации и учетных данных
 cp .env.example .env
+cp .my.cnf.example .my.cnf
+chmod 600 .env .my.cnf
 ```
 
 ### 3. Конфигурация доступа для MySQLd Exporter (`.my.cnf`)
@@ -84,8 +64,8 @@ cp .env.example .env
 ```bash
 cat << 'EOF' > .my.cnf
 [client]
-user=root
-password=RootStrongPassword321!
+user=exporter
+password=GenerateStrongExporterPass789!
 port=3306
 EOF
 
@@ -108,7 +88,7 @@ dagger call deploy-app \
   --host-path=$(pwd)
 ```
 
-Существует возможность разворачивания Galera конфигурации (3 кластера):
+Существует возможность разворачивания Galera конфигурации (кластер из 3 нод + HAProxy)
 ```bash
 dagger call deploy-galera \
   --docker-sock=/var/run/docker.sock \
@@ -143,7 +123,7 @@ dagger call setup-kuma \
 
 ### Бонусные команды
 
-#### 4. End-to-End развертывание «под ключ» (`deploy-all`)
+#### 1. End-to-End развертывание «под ключ» (`deploy-all`)
 Выполняет полный цикл развертывания платформы:
 1. Поднимает Слой 1 (App + DB).
 2. Автоматически инициализирует первого администратора Uptime Kuma через WebSocket и выпускает API-токен для Prometheus.
@@ -154,18 +134,27 @@ dagger call setup-kuma \
 Возможность поднять Galera конфигурацию MariaDB с флагом `--galera=true`
 
 ```bash
+# Развертывание с одиночной нодой MariaDB (по умолчанию):
 dagger call deploy-all \
   --docker-sock=/var/run/docker.sock \
   --host-path=$(pwd)
+
+# Развертывание с отказоустойчивым кластером Galera (3 ноды + HAProxy):
+dagger call deploy-all \
+  --docker-sock=/var/run/docker.sock \
+  --host-path=$(pwd) \
+  --galera=true
 ```
 
-#### 5. Chaos Testing (`chaos-test`)
+#### 2. Chaos Testing (`chaos-test`)
 Тестирует устойчивость контура к внезапным сбоям:
 1. Проверяет начальный статус системы (`mysql_up == 1`).
-2. Инициирует аварийный сбой MariaDB (эмуляция аппаратного сбоя / Out-Of-Memory через сигнал `SIGSEGV`).
-3. Валидирует переход метрики в Prometheus и панели на дашборде в статус **«Все Плохо»** (`mysql_up == 0`).
+2. Инициирует аварийный сбой MariaDB (`-TERM`).
+3. Валидирует переход метрики в Prometheus и панели на дашборде в статус **«Все Плохо»** (`mysql_up == 0 и mysql_global_status_uptime<20`).
 4. Ожидает автоматического восстановления сервиса политикой **`restart: unless-stopped`**.
-5. Валидирует возвращение метрики на дашборде в статус **«Восстановление / UP»** (`mysql_up == 1`).
+5. Валидирует возвращение метрики на дашборде в статус **«Восстановление / UP»** (`mysql_up == 0 и mysql_global_status_uptime>20`).
+
+**Примечание**: Тест отказа (chaos-test) предназначен для базовой конфигурации стенда (одиночная нода MariaDB). В режиме Galera Cluster аварийное падение отдельной ноды намеренно не переводит платформу в статус «Все Плохо», так как балансировщик HAProxy прозрачно переключает нагрузку на резервные узлы кластера (демонстрация High Availability).
 
 ```bash
 dagger call chaos-test \
@@ -173,7 +162,7 @@ dagger call chaos-test \
   --host-path=$(pwd)
 ```
 
-#### 6. Полная очистка стенда (`destroy`)
+#### 3. Полная очистка стенда (`destroy`)
 Останавливает все контейнеры, удаляет сети и очищает связанные тома:
 ```bash
 dagger call destroy \
@@ -188,8 +177,8 @@ dagger call destroy \
 | Сервис | URL | Логин | Пароль | Описание |
 |---|---|---|---|---|
 | **Grafana** | [http://localhost:3000](http://localhost:3000) | `admin` | `AdminStrongPassword321!` | Панель мониторинга здоровья контура |
-| **Prometheus** | [http://localhost:9090](http://localhost:9090) | — | — | Хранилище метрик и база PromQL |
-| **Uptime Kuma** | [http://localhost:3001](http://localhost:3001) | `admin` | `AdminStrongPassword321!` | Веб-интерфейс мониторинга доступности |
+| **Prometheus** | [http://localhost:9090](http://localhost:9090) (Только из localhost хоста) | — | — | Хранилище метрик и база PromQL |
+| **Uptime Kuma** | [http://localhost:3001](http://localhost:3001) (Только из localhost хоста) | `admin` | `AdminStrongPassword321!` | Веб-интерфейс мониторинга доступности |
 | **Node Exporter** | `http://localhost:9100/metrics` (порт закрыт наружу) | — | — | Метрики хостовой ОС |
 | **cAdvisor** | `http://localhost:8080/metrics` (порт закрыт наружу) | — | — | Метрики ресурсов контейнеров |
 | **MySQLd Exporter**| `http://localhost:9104/metrics` (порт закрыт наружу) | — | — | Внутренние метрики БД MariaDB |
@@ -230,15 +219,13 @@ docker exec mariadb sh -c "kill -SEGV 1"
 
 ### 3. Безопасность секретов (File-based secrets)
 Вместо передачи токенов через переменные окружения (которые утекают через `docker inspect`) или хардкода в `prometheus.yml`, настроена связка:
-* Скрипт настройки генерирует токен через WebSocket и сохраняет его в файл `kuma.token`.
-* Dagger гарантирует безопасные права `chmod 600` на создаваемый файл.
-* Prometheus перечитывает секрет на лету через нативную директиву `password_file: '/etc/prometheus/kuma.token'`.
+Скрипт настройки генерирует токен через WebSocket и сохраняет его в файл secrets/kuma.token с правами 644 (необходимыми для чтения непривилегированным пользователем nobody в контейнере Prometheus). Prometheus считывает секрет на лету через директиву password_file: '/etc/prometheus/secrets/kuma.token'.
+
+---
 
 ## Ограничения окружения: почему cAdvisor не работает в Docker Desktop (Windows / macOS)
 
 Сервис мониторинга контейнеров **cAdvisor** предназначен для работы исключительно на **нативном Linux** (включая **Docker Engine внутри WSL2**) и архитектурно несовместим с **Docker Desktop**.
-
----
 
 ### Архитектурная причина
 
@@ -254,6 +241,7 @@ cAdvisor — это не обычное пользовательское при�
   NAME              STATE           VERSION
 * Ubuntu            Running         2
   docker-desktop    Running         2
+```
 
 2. **Недоступность каталога данных Docker (`/var/lib/docker`):**
    * При использовании драйвера хранения `overlay2` cAdvisor жестко закодирован на чтение файла метаданных слоя контейнера:  
@@ -267,8 +255,6 @@ cAdvisor — это не обычное пользовательское при�
    * Docker Desktop не пробрасывает настоящий сокет containerd в пользовательский дистрибутив WSL.
    * **Результат:** cAdvisor не может обнаружить запущенные контейнеры и выдает:  
      `container "..." in namespace "moby": not found`.
-
----
 
 ### Решение для локальной разработки
 
