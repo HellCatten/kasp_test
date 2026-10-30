@@ -1,0 +1,289 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Service Status & Galera Quorum Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 2 },
+              { "color": "green", "value": 3 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "max(mysql_global_status_wsrep_cluster_size) or sum(mysql_up)", "legendFormat": "Cluster Size", "refId": "A" }],
+      "title": "Galera Cluster Size (Nodes)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "color": "red", "text": "DOWN" }, "1": { "color": "green", "text": "UP" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "up{job=\"uptime-kuma\"}", "legendFormat": "Uptime Kuma", "refId": "A" }],
+      "title": "Uptime Kuma Status",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(mysql_up)", "legendFormat": "Online Nodes", "refId": "A" }],
+      "title": "MariaDB Online Exporters",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "expr": "sum(rate(mysql_global_status_queries[1m]))", "legendFormat": "Total QPS", "refId": "A" }],
+      "title": "Total Cluster QPS",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
+      "id": 200,
+      "title": "Galera Replication & Health Details",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter" },
+          "mappings": [
+            { "options": { "0": { "text": "Closed" }, "1": { "text": "Joining" }, "2": { "text": "Donor/Desync" }, "3": { "text": "Joined" }, "4": { "text": "Synced" } }, "type": "value" }
+          ],
+          "max": 4,
+          "min": 0
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 5 },
+      "id": 5,
+      "targets": [{ "expr": "mysql_global_status_wsrep_local_state{instance=~\"$instance\"}", "legendFormat": "{{instance}} (4=Synced)", "refId": "A" }],
+      "title": "Galera Node State (4 = Synced)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0.05 }]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 5 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "(rate(mysql_global_status_wsrep_flow_control_paused_ns{instance=~\"$instance\"}[1m]) / 1000000000) or rate(mysql_global_status_wsrep_flow_control_paused{instance=~\"$instance\"}[1m]) or (0 * mysql_up{instance=~\"$instance\"})",
+          "legendFormat": "{{instance}} Flow Control Paused",
+          "refId": "A"
+        }
+      ],
+      "title": "Flow Control Paused per Node (Replication Delays)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" }, "unit": "short" } },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 11 },
+      "id": 7,
+      "targets": [
+        { "expr": "mysql_global_status_wsrep_local_recv_queue{instance=~\"$instance\"} or (0 * mysql_up{instance=~\"$instance\"})", "legendFormat": "{{instance}} Recv Queue", "refId": "A" },
+        { "expr": "mysql_global_status_wsrep_local_send_queue{instance=~\"$instance\"} or (0 * mysql_up{instance=~\"$instance\"})", "legendFormat": "{{instance}} Send Queue", "refId": "B" }
+      ],
+      "title": "Galera Send / Receive Queue Size",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" }, "unit": "ops" } },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 11 },
+      "id": 8,
+      "targets": [
+        { "expr": "rate(mysql_global_status_wsrep_local_cert_failures{instance=~\"$instance\"}[1m]) or (0 * mysql_up{instance=~\"$instance\"})", "legendFormat": "{{instance}} Cert Failures (Write Conflicts)", "refId": "A" }
+      ],
+      "title": "Certification Failures (Write Conflicts)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "id": 300,
+      "title": "Host System Metrics (Node Exporter)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth" },
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 18 },
+      "id": 11,
+      "targets": [{ "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[2m])) * 100)", "legendFormat": "CPU Busy", "refId": "A" }],
+      "title": "Host CPU Usage (%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 20 },
+          "unit": "bytes"
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 18 },
+      "id": 12,
+      "targets": [
+        { "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes", "legendFormat": "Memory Used", "refId": "A" },
+        { "expr": "node_memory_MemTotal_bytes", "legendFormat": "Total Memory", "refId": "B" }
+      ],
+      "title": "Host Memory Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line" },
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 18 },
+      "id": 13,
+      "targets": [
+        { "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\"} * 100) / node_filesystem_size_bytes{mountpoint=\"/\"})", "legendFormat": "Disk Usage (/) ", "refId": "A" }
+      ],
+      "title": "Host Root FS Disk Usage (%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" } } },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 18 },
+      "id": 14,
+      "targets": [
+        { "expr": "node_load1", "legendFormat": "Load 1m", "refId": "A" },
+        { "expr": "node_load5", "legendFormat": "Load 5m", "refId": "B" },
+        { "expr": "node_load15", "legendFormat": "Load 15m", "refId": "C" }
+      ],
+      "title": "Host Load Average",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "id": 400,
+      "title": "Containers Resources (cAdvisor)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percent" } },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 25 },
+      "id": 21,
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\".+\"}[2m])) by (name) * 100", "legendFormat": "{{name}}", "refId": "A" }],
+      "title": "Container CPU Usage (%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 25 },
+      "id": 22,
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [{ "expr": "sum(container_memory_working_set_bytes{name=~\".+\"}) by (name)", "legendFormat": "{{name}}", "refId": "A" }],
+      "title": "Container Memory Working Set",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["mariadb", "galera", "cluster", "ha", "cadvisor", "node-exporter"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "definition": "label_values(mysql_up, instance)",
+        "includeAll": true,
+        "multi": true,
+        "name": "instance",
+        "query": "label_values(mysql_up, instance)",
+        "refresh": 1,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Infrastructure: Host, Containers & Galera Cluster Monitoring",
+  "uid": "mariadb-galera-cluster",
+  "version": 1
+}

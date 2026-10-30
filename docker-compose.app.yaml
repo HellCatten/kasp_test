@@ -1,0 +1,74 @@
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_AUTO_UPGRADE: "true"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./init-exporter.sql:/docker-entrypoint-initdb.d/init-exporter.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - platform_net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+    security_opt:
+      - no-new-privileges:true
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:2.5.8-slim
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      # Публикуем на 127.0.0.1 хоста
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - kuma_data:/app/data
+    environment:
+      TZ: ${TZ}
+      UPTIME_KUMA_DB_TYPE: mariadb
+      UPTIME_KUMA_DB_HOSTNAME: mariadb
+      UPTIME_KUMA_DB_PORT: 3306
+      UPTIME_KUMA_DB_USERNAME: ${MARIADB_USER}
+      UPTIME_KUMA_DB_PASSWORD: ${MARIADB_PASSWORD}
+      UPTIME_KUMA_DB_NAME: ${MARIADB_DATABASE}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001"]
+      interval: 10s
+      retries: 3
+      start_period: 60s
+      timeout: 5s
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - platform_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  db_data:
+  kuma_data:
+
+networks:
+  platform_net:
+    name: platform_net
+    driver: bridge

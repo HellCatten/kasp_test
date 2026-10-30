@@ -1,0 +1,8 @@
+{
+  "name": "stand-automation",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "socket.io-client": "^4.7.5"
+  }
+}

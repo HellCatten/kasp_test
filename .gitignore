@@ -1,0 +1,7 @@
+.env
+.my.cnf
+secrets/*.token
+kuma.token
+*.tar
+*.log
+.DS_Store
